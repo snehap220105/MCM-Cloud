@@ -1,0 +1,296 @@
+{
+ "name": "Retail_Billing_Script",
+ "page": 1,
+ "sel": "verify",
+ "pages": [
+  "1. Greeting",
+  "2. Verification",
+  "3. Resolution",
+  "4. Wrap-up"
+ ],
+ "comps": {
+  "1": [
+   [
+    "head",
+    "greet",
+    "Greeting",
+    "<b>Hello {{Scripter.Customer Name}}</b>, thank you for calling MCM Retail. My name is {{Scripter.Agent Name}} &mdash; how can I help you today?"
+   ],
+   [
+    "info",
+    "ctx",
+    "Interaction context",
+    "Queue: <b>Retail_Billing_L1</b> &middot; ANI {{Scripter.ANI}} &middot; Waited {{Scripter.Wait Time}} &middot; Tier <b>{{Flow.CustomerTier}}</b>"
+   ],
+   [
+    "btnrow",
+    "nav1",
+    "",
+    ""
+   ]
+  ],
+  "2": [
+   [
+    "head",
+    "verify",
+    "Verification",
+    "Before I can discuss the account I need to verify two details."
+   ],
+   [
+    "field",
+    "acct",
+    "Account number",
+    "40021988"
+   ],
+   [
+    "field",
+    "pcode",
+    "Postcode (first line)",
+    "SW1A 1AA"
+   ],
+   [
+    "field",
+    "dob",
+    "Date of birth",
+    "12/04/1987"
+   ],
+   [
+    "toggle",
+    "pci",
+    "Take card payment &mdash; invoke Secure Pause",
+    ""
+   ],
+   [
+    "btnrow",
+    "nav2",
+    "",
+    ""
+   ]
+  ],
+  "3": [
+   [
+    "head",
+    "res",
+    "Resolution",
+    "Select the reason for the call and follow the guidance."
+   ],
+   [
+    "select",
+    "reason",
+    "Call reason",
+    "Billing query|Payment arrangement|Refund request|Direct debit change|Dispute"
+   ],
+   [
+    "info",
+    "guide",
+    "Guidance",
+    "<b>Billing query:</b> open the last invoice in the CRM panel, confirm the charge lines, and offer a written breakdown by email if the customer is not satisfied."
+   ],
+   [
+    "field",
+    "notes",
+    "Agent notes",
+    ""
+   ],
+   [
+    "btnrow",
+    "nav3",
+    "",
+    ""
+   ]
+  ],
+  "4": [
+   [
+    "head",
+    "wrap",
+    "Wrap-up",
+    "Confirm the outcome and close the interaction."
+   ],
+   [
+    "select",
+    "disp",
+    "Disposition",
+    "Resolved &mdash; first contact|Resolved &mdash; escalated|Callback arranged|Refund raised|No resolution"
+   ],
+   [
+    "toggle",
+    "follow",
+    "Send follow-up email",
+    ""
+   ],
+   [
+    "field",
+    "ref",
+    "Case reference",
+    "CS-884210"
+   ],
+   [
+    "btnrow",
+    "nav4",
+    "",
+    ""
+   ]
+  ]
+ },
+ "props": {
+  "verify": [
+   [
+    "sect",
+    "Text component"
+   ],
+   [
+    "Name",
+    "text",
+    "Verification"
+   ],
+   [
+    "Font size",
+    "sel",
+    "Medium|Small|Large"
+   ],
+   [
+    "Colour",
+    "sel",
+    "Default|Muted|Warning"
+   ],
+   [
+    "tgl",
+    "Visible",
+    1
+   ],
+   [
+    "tgl",
+    "Read only",
+    1
+   ]
+  ],
+  "acct": [
+   [
+    "sect",
+    "Input component"
+   ],
+   [
+    "Name",
+    "text",
+    "Account number"
+   ],
+   [
+    "Bind to",
+    "sel",
+    "Scripter.Account Number|Flow.AccountId|Custom variable"
+   ],
+   [
+    "Input type",
+    "sel",
+    "Text|Number|Date|Masked"
+   ],
+   [
+    "Max length",
+    "text",
+    "12"
+   ],
+   [
+    "tgl",
+    "Required",
+    1
+   ],
+   [
+    "tgl",
+    "Mask value on screen",
+    0
+   ],
+   [
+    "sect",
+    "Validation"
+   ],
+   [
+    "Pattern",
+    "text",
+    "^[0-9]{8}$"
+   ],
+   [
+    "Error message",
+    "text",
+    "Enter the 8 digit account number"
+   ]
+  ],
+  "pci": [
+   [
+    "sect",
+    "Action button"
+   ],
+   [
+    "Label",
+    "text",
+    "Take card payment"
+   ],
+   [
+    "Action",
+    "sel",
+    "Invoke secure flow|Blind transfer|Consult transfer|Update contact list|Run data action|Set wrap-up code"
+   ],
+   [
+    "Secure flow",
+    "sel",
+    "Retail_Card_Payment_Secure|Verify_Account_PIN"
+   ],
+   [
+    "tgl",
+    "Pause recording while running",
+    1
+   ],
+   [
+    "tgl",
+    "Disable after first click",
+    1
+   ]
+  ]
+ },
+ "vars": [
+  [
+   "Scripter.Customer Name",
+   "Built-in",
+   "string"
+  ],
+  [
+   "Scripter.ANI",
+   "Built-in",
+   "string"
+  ],
+  [
+   "Scripter.Agent Name",
+   "Built-in",
+   "string"
+  ],
+  [
+   "Scripter.Wait Time",
+   "Built-in",
+   "duration"
+  ],
+  [
+   "Scripter.Queue Name",
+   "Built-in",
+   "string"
+  ],
+  [
+   "Flow.CustomerTier",
+   "Input",
+   "string"
+  ],
+  [
+   "Flow.AccountId",
+   "Input",
+   "string"
+  ],
+  [
+   "Script.CaseRef",
+   "Output",
+   "string"
+  ],
+  [
+   "Script.Disposition",
+   "Output",
+   "string"
+  ]
+ ]
+}

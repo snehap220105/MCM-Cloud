@@ -1,0 +1,333 @@
+{
+ "flow": "Retail_Main_IVR",
+ "type": "Inbound Call",
+ "ver": "v14 (published)",
+ "sel": "menu1",
+ "nodes": {
+  "start": {
+   "x": 40,
+   "y": 20,
+   "t": "Start",
+   "c": "g",
+   "ico": "&#9654;",
+   "b": "Incoming Call &mdash; Retail_Main_IVR<br><b>Entry:</b> +44 20 7946 0100"
+  },
+  "init": {
+   "x": 40,
+   "y": 140,
+   "t": "Initialize Flow",
+   "c": "b",
+   "ico": "&#9881;",
+   "b": "Set Participant Data<br>Set <b>Task.Language</b> = en-GB"
+  },
+  "sched": {
+   "x": 40,
+   "y": 262,
+   "t": "Schedule Group",
+   "c": "y",
+   "ico": "&#128337;",
+   "b": "Evaluate <b>Retail_Hours</b><br>Open &middot; Closed &middot; Holiday"
+  },
+  "welcome": {
+   "x": 330,
+   "y": 262,
+   "t": "Play Audio",
+   "c": "p",
+   "ico": "&#9834;",
+   "b": "Prompt: <b>Retail_Welcome</b><br>TTS fallback enabled"
+  },
+  "menu1": {
+   "x": 330,
+   "y": 384,
+   "t": "Menu &mdash; Main",
+   "c": "",
+   "ico": "&#9776;",
+   "b": "1 Sales &middot; 2 Support<br>3 Billing &middot; 9 Repeat<br>Timeout 7s &middot; 3 retries"
+  },
+  "data": {
+   "x": 640,
+   "y": 262,
+   "t": "Call Data Action",
+   "c": "b",
+   "ico": "&#8644;",
+   "b": "CRM_Lookup_Customer<br>In: ANI &nbsp; Out: Tier, Name"
+  },
+  "dec": {
+   "x": 640,
+   "y": 384,
+   "t": "Decision",
+   "c": "y",
+   "ico": "&#9670;",
+   "b": "Tier == &quot;Gold&quot;"
+  },
+  "vip": {
+   "x": 930,
+   "y": 322,
+   "t": "Transfer to ACD",
+   "c": "",
+   "ico": "&#8594;",
+   "b": "Queue: <b>VIP_Concierge</b><br>Priority 8 &middot; Skill: Retail"
+  },
+  "q1": {
+   "x": 930,
+   "y": 452,
+   "t": "Transfer to ACD",
+   "c": "",
+   "ico": "&#8594;",
+   "b": "Queue: <b>Retail_Billing_L1</b><br>Skills: Billing (3+)<br>In-queue flow: Retail_InQueue"
+  },
+  "closed": {
+   "x": 40,
+   "y": 404,
+   "t": "Play Audio",
+   "c": "p",
+   "ico": "&#9834;",
+   "b": "Prompt: <b>Retail_Closed</b><br>Then offer callback"
+  },
+  "cb": {
+   "x": 40,
+   "y": 520,
+   "t": "Callback",
+   "c": "g",
+   "ico": "&#9990;",
+   "b": "Queue: Retail_Billing_L1<br>Collect number &amp; confirm"
+  },
+  "dis": {
+   "x": 40,
+   "y": 636,
+   "t": "Disconnect",
+   "c": "r",
+   "ico": "&#10006;",
+   "b": "End interaction<br>Wrap-up: IVR_Abandoned"
+  }
+ },
+ "links": [
+  [
+   "start",
+   "init"
+  ],
+  [
+   "init",
+   "sched"
+  ],
+  [
+   "sched",
+   "welcome"
+  ],
+  [
+   "sched",
+   "closed"
+  ],
+  [
+   "welcome",
+   "menu1"
+  ],
+  [
+   "menu1",
+   "data"
+  ],
+  [
+   "data",
+   "dec"
+  ],
+  [
+   "dec",
+   "vip"
+  ],
+  [
+   "dec",
+   "q1"
+  ],
+  [
+   "closed",
+   "cb"
+  ],
+  [
+   "cb",
+   "dis"
+  ]
+ ],
+ "props": {
+  "menu1": [
+   [
+    "sect",
+    "Menu"
+   ],
+   [
+    "Name",
+    "text",
+    "Main Menu"
+   ],
+   [
+    "Prompt",
+    "sel",
+    "Retail_MainMenu|Retail_Welcome|System_PleaseChoose"
+   ],
+   [
+    "sect",
+    "Choices"
+   ],
+   [
+    "DTMF 1",
+    "text",
+    "Sales &rarr; Transfer to Retail_Sales_L1"
+   ],
+   [
+    "DTMF 2",
+    "text",
+    "Support &rarr; Sub-menu Support_Menu"
+   ],
+   [
+    "DTMF 3",
+    "text",
+    "Billing &rarr; Call Data Action"
+   ],
+   [
+    "DTMF 9",
+    "text",
+    "Repeat menu"
+   ],
+   [
+    "sect",
+    "Behaviour"
+   ],
+   [
+    "Timeout (s)",
+    "text",
+    "7"
+   ],
+   [
+    "Max retries",
+    "text",
+    "3"
+   ],
+   [
+    "tgl",
+    "Enable speech recognition (ASR)",
+    1
+   ],
+   [
+    "tgl",
+    "Allow barge-in",
+    1
+   ],
+   [
+    "tgl",
+    "Log DTMF to participant data",
+    0
+   ]
+  ],
+  "q1": [
+   [
+    "sect",
+    "Transfer to ACD"
+   ],
+   [
+    "Queue",
+    "sel",
+    "Retail_Billing_L1|Retail_Technical_L1|Digital_Chat|VIP_Concierge"
+   ],
+   [
+    "Priority",
+    "text",
+    "5"
+   ],
+   [
+    "Skills",
+    "text",
+    "Billing, English"
+   ],
+   [
+    "Language",
+    "sel",
+    "en-GB|en-US|fr-FR"
+   ],
+   [
+    "sect",
+    "Pre-transfer"
+   ],
+   [
+    "Preferred agent",
+    "text",
+    "(none)"
+   ],
+   [
+    "tgl",
+    "Set screen pop URL",
+    1
+   ],
+   [
+    "tgl",
+    "Enable whisper prompt",
+    0
+   ],
+   [
+    "sect",
+    "Failure"
+   ],
+   [
+    "On failure",
+    "sel",
+    "Disconnect|Play prompt then callback|Transfer to backup queue"
+   ]
+  ],
+  "data": [
+   [
+    "sect",
+    "Data Action"
+   ],
+   [
+    "Category",
+    "sel",
+    "Web Services Data Actions|Salesforce|Custom"
+   ],
+   [
+    "Action",
+    "sel",
+    "CRM_Lookup_Customer|CRM_Create_Case|Verify_Account_PIN"
+   ],
+   [
+    "sect",
+    "Inputs"
+   ],
+   [
+    "ani",
+    "text",
+    "Call.Ani"
+   ],
+   [
+    "channel",
+    "text",
+    "&quot;voice&quot;"
+   ],
+   [
+    "sect",
+    "Outputs"
+   ],
+   [
+    "Tier &rarr;",
+    "text",
+    "Flow.CustomerTier"
+   ],
+   [
+    "Name &rarr;",
+    "text",
+    "Flow.CustomerName"
+   ],
+   [
+    "sect",
+    "Error handling"
+   ],
+   [
+    "Timeout (ms)",
+    "text",
+    "4000"
+   ],
+   [
+    "On error",
+    "sel",
+    "Take failure path|Continue with defaults"
+   ]
+  ]
+ }
+}
