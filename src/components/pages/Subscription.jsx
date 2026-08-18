@@ -1,31 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { downloadTextFile } from '../../utils/csv.js'
-
-const DEFAULT_PLAN_LABEL = 'CX 3 (Annual, named users)'
-
-const LICENCES = [
-  { licence: 'CX 1', purchased: 40, assigned: 2, available: 38, price: '£60/seat' },
-  { licence: 'CX 2', purchased: 60, assigned: 5, available: 55, price: '£95/seat' },
-  { licence: 'CX 3', purchased: 25, assigned: 3, available: 22, price: '£125/seat' },
-  { licence: 'CX 4', purchased: 10, assigned: 0, available: 10, price: '£150/seat' },
-  { licence: 'Communicate', purchased: 50, assigned: 0, available: 50, price: '£18/seat' }
-]
-
-const USAGE = [
-  { item: 'Telephony minutes (this month)', usage: '1193 min', charge: '£14.32' },
-  { item: 'SMS / WhatsApp messages', usage: '59 conversations', charge: '£2.36' },
-  { item: 'Recording storage', usage: '42.1 GB (234 recordings)', charge: '£14.74' }
-]
-
-const INVOICES = [
-  { period: 'August 2026', seats: '£970', total: '£1,090', status: 'open' },
-  { period: 'July 2026', seats: '£970', total: '£1,083', status: 'paid' },
-  { period: 'June 2026', seats: '£970', total: '£1,076', status: 'paid' }
-]
+import { apiGet, apiPatch } from '../../utils/apiClient.js'
 
 const STATUS_LABEL = { open: 'Open', paid: 'Paid' }
 
-function LicencesCard() {
+function LicencesCard({ licences }) {
   return (
     <div className="card">
       <div className="card-header-row">
@@ -44,7 +23,7 @@ function LicencesCard() {
           </tr>
         </thead>
         <tbody>
-          {LICENCES.map((row) => {
+          {licences.map((row) => {
             const pct = row.purchased === 0 ? 0 : Math.round((row.assigned / row.purchased) * 100)
             return (
               <tr key={row.licence}>
@@ -69,7 +48,7 @@ function LicencesCard() {
   )
 }
 
-function UsageCard() {
+function UsageCard({ usage }) {
   return (
     <div className="card">
       <div className="card-header-row">
@@ -85,7 +64,7 @@ function UsageCard() {
           </tr>
         </thead>
         <tbody>
-          {USAGE.map((row) => (
+          {usage.map((row) => (
             <tr key={row.item}>
               <th scope="row">{row.item}</th>
               <td>{row.usage}</td>
@@ -98,7 +77,7 @@ function UsageCard() {
   )
 }
 
-function InvoicesCard({ planLabel }) {
+function InvoicesCard({ invoices, planLabel }) {
   const handleStatement = (invoice) => {
     const content = [
       'MCM GROUP PLC — SUBSCRIPTION STATEMENT',
@@ -132,7 +111,7 @@ function InvoicesCard({ planLabel }) {
           </tr>
         </thead>
         <tbody>
-          {INVOICES.map((row) => (
+          {invoices.map((row) => (
             <tr key={row.period}>
               <th scope="row">{row.period}</th>
               <td>{row.seats}</td>
@@ -156,10 +135,8 @@ function InvoicesCard({ planLabel }) {
   )
 }
 
-const PLAN_TIERS = LICENCES.map((l) => ({ id: l.licence, price: l.price }))
-
-function ChangePlanDrawer({ currentPlan, onCancel, onSave }) {
-  const currentTier = PLAN_TIERS.find((t) => currentPlan.startsWith(t.id))?.id || PLAN_TIERS[0].id
+function ChangePlanDrawer({ currentPlan, planTiers, onCancel, onSave }) {
+  const currentTier = planTiers.find((t) => currentPlan.startsWith(t.id))?.id || planTiers[0].id
   const [selected, setSelected] = useState(currentTier)
 
   useEffect(() => {
@@ -186,7 +163,7 @@ function ChangePlanDrawer({ currentPlan, onCancel, onSave }) {
 
         <div className="modal-body">
           <h3 className="drawer-section-heading">Plan</h3>
-          {PLAN_TIERS.map((tier) => (
+          {planTiers.map((tier) => (
             <label key={tier.id} className="plan-option-row">
               <input
                 type="radio"
@@ -217,8 +194,29 @@ function ChangePlanDrawer({ currentPlan, onCancel, onSave }) {
 }
 
 function Subscription() {
-  const [planLabel, setPlanLabel] = useState(DEFAULT_PLAN_LABEL)
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [isChangingPlan, setIsChangingPlan] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    apiGet('/subscription')
+      .then((res) => { if (!cancelled) setData(res) })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const handleChangePlan = async (newPlanLabel) => {
+    setIsChangingPlan(false)
+    try {
+      await apiPatch('/subscription/plan', { planLabel: newPlanLabel })
+      setData((prev) => ({ ...prev, planLabel: newPlanLabel }))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   return (
     <div className="page">
@@ -230,34 +228,42 @@ function Subscription() {
 
       <div className="page-head">
         <h1 className="page-title">Subscription</h1>
-        <div className="page-actions">
-          <button type="button" className="btn btn-primary" onClick={() => setIsChangingPlan(true)}>
-            Change plan
-          </button>
-        </div>
+        {data && (
+          <div className="page-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setIsChangingPlan(true)}>
+              Change plan
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="page-tabs" role="tablist" aria-label="Subscription plan">
-        <span className="page-tab active static">Plan: {planLabel}</span>
-      </div>
+      {error && <p className="page-note" style={{ color: '#c0392b' }}>Couldn&rsquo;t load subscription: {error}</p>}
 
-      <LicencesCard />
+      {loading ? (
+        <p className="page-note">Loading subscription…</p>
+      ) : data ? (
+        <>
+          <div className="page-tabs" role="tablist" aria-label="Subscription plan">
+            <span className="page-tab active static">Plan: {data.planLabel}</span>
+          </div>
 
-      <div className="subscription-grid">
-        <UsageCard />
-        <InvoicesCard planLabel={planLabel} />
-      </div>
+          <LicencesCard licences={data.licences} />
 
-      {isChangingPlan && (
-        <ChangePlanDrawer
-          currentPlan={planLabel}
-          onCancel={() => setIsChangingPlan(false)}
-          onSave={(newPlan) => {
-            setPlanLabel(newPlan)
-            setIsChangingPlan(false)
-          }}
-        />
-      )}
+          <div className="subscription-grid">
+            <UsageCard usage={data.usage} />
+            <InvoicesCard invoices={data.invoices} planLabel={data.planLabel} />
+          </div>
+
+          {isChangingPlan && (
+            <ChangePlanDrawer
+              currentPlan={data.planLabel}
+              planTiers={data.licences.map((l) => ({ id: l.licence, price: l.price }))}
+              onCancel={() => setIsChangingPlan(false)}
+              onSave={handleChangePlan}
+            />
+          )}
+        </>
+      ) : null}
     </div>
   )
 }

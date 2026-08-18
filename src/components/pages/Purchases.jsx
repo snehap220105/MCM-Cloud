@@ -1,18 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { downloadCsv } from '../../utils/csv.js'
 import ColumnsMenu from '../ColumnsMenu.jsx'
+import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js'
 
 const TABS = ['Orders', 'Marketplace', 'Add-ons']
 const DIVISIONS = ['Sales', 'Support', 'IT Ops']
 
-const ORDERS = [
-  { id: 'ORD-4471', item: 'MCM CX 3 — WEM (Named)', qty: 25, status: 'provisioned', requestedBy: 'F. Khan', date: '02 Aug 2026', division: 'Sales' },
-  { id: 'ORD-4468', item: 'AI Experience token pack — 50k', qty: 2, status: 'provisioned', requestedBy: 'F. Khan', date: '21 Jul 2026', division: 'Sales' },
-  { id: 'ORD-4455', item: 'Speech & Text Analytics', qty: 50, status: 'pending', requestedBy: 'S. Patel', date: '06 Jul 2026', division: 'Support' },
-  { id: 'ORD-4441', item: 'Predictive Engagement', qty: 50, status: 'provisioned', requestedBy: 'F. Khan', date: '14 Jun 2026', division: 'Sales' },
-  { id: 'ORD-4402', item: 'Additional storage — 5 TB', qty: 1, status: 'provisioned', requestedBy: 'IT Ops', date: '30 Apr 2026', division: 'IT Ops' },
-  { id: 'ORD-4388', item: 'MCM CX 2 Concurrent', qty: 20, status: 'cancelled', requestedBy: 'S. Patel', date: '12 Mar 2026', division: 'Support' }
-]
+function mapOrder(row) {
+  return {
+    id: row.id,
+    item: row.item,
+    qty: row.qty,
+    status: row.status,
+    requestedBy: row.requested_by,
+    date: row.order_date,
+    division: row.division
+  }
+}
 
 const STATUS_LABEL = {
   provisioned: 'Provisioned',
@@ -25,20 +29,9 @@ const COLUMNS = [
   { key: 'item', label: 'Item' },
   { key: 'qty', label: 'Quantity' },
   { key: 'status', label: 'Status' },
+  { key: 'division', label: 'Division' },
   { key: 'requestedBy', label: 'Requested by' },
   { key: 'date', label: 'Date' }
-]
-
-const MARKETPLACE_ADDONS = [
-  { name: 'Speech & Text Analytics', category: 'WEM', price: '$40/user/mo' },
-  { name: 'WEM Upgrade (CX 3)', category: 'WEM', price: '$40/user/mo' },
-  { name: 'AI Token Pack (500)', category: 'AI', price: '$350/mo' },
-  { name: 'Extra Storage 1 TB', category: 'Platform', price: '$250/mo' }
-]
-
-const ACTIVE_ADDONS = [
-  { name: 'Quality Management', since: 'Jan 2026', monthly: '$1,850' },
-  { name: 'BYOC Cloud', since: 'Jan 2026', monthly: 'usage-based' }
 ]
 
 function IconColumns() {
@@ -425,6 +418,7 @@ function NewPurchaseDrawer({ onCancel, onSave }) {
     licenceModel: LICENCE_MODELS[0],
     quantity: '25',
     startDate: '01 Sep 2026',
+    division: DIVISIONS[0],
     costCentre: 'CC-1180 Contact Centre',
     approver: APPROVERS[0],
     autoAssign: false
@@ -503,6 +497,18 @@ function NewPurchaseDrawer({ onCancel, onSave }) {
             />
           </div>
 
+          <div className="modal-field">
+            <label className="modal-label" htmlFor="np-division">Division</label>
+            <select
+              id="np-division"
+              className="modal-select"
+              value={form.division}
+              onChange={(e) => setField('division', e.target.value)}
+            >
+              {DIVISIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+
           <h3 className="drawer-section-heading">Approval</h3>
 
           <div className="modal-field">
@@ -553,12 +559,34 @@ function NewPurchaseDrawer({ onCancel, onSave }) {
 function Purchases() {
   const [activeTab, setActiveTab] = useState('Orders')
   const [isCreating, setIsCreating] = useState(false)
-  const [orders, setOrders] = useState(ORDERS)
+  const [orders, setOrders] = useState([])
+  const [marketplaceAddons, setMarketplaceAddons] = useState([])
+  const [activeAddons, setActiveAddons] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [divisionFilter, setDivisionFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('Any')
   const [viewingOrder, setViewingOrder] = useState(null)
   const [hiddenColumns, setHiddenColumns] = useState(() => new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      apiGet('/purchases/orders'),
+      apiGet('/purchases/marketplace'),
+      apiGet('/purchases/addons')
+    ])
+      .then(([ordersRes, marketplaceRes, addonsRes]) => {
+        if (cancelled) return
+        setOrders(ordersRes.map(mapOrder))
+        setMarketplaceAddons(marketplaceRes)
+        setActiveAddons(addonsRes)
+      })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const toggleColumn = (key) =>
     setHiddenColumns((prev) => {
@@ -581,50 +609,41 @@ function Purchases() {
     })
   }, [orders, search, divisionFilter, statusFilter])
 
-  const handleSave = (form) => {
-    const nextId = `ORD-${4471 + orders.length + 1}`
-    setOrders((prev) => [
-      {
-        id: nextId,
-        item: `${form.product} (${form.licenceModel})`,
-        qty: Number(form.quantity) || 0,
-        status: 'pending',
-        requestedBy: 'F. Khan',
-        date: form.startDate,
-        division: 'Sales'
-      },
-      ...prev
-    ])
-    setIsCreating(false)
+  const handleSave = async (form) => {
+    try {
+      const row = await apiPost('/purchases/orders', form)
+      setOrders((prev) => [mapOrder(row), ...prev])
+      setIsCreating(false)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  const handleUpdateOrder = (orderId, updated) => {
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)))
-    setViewingOrder(null)
+  const handleUpdateOrder = async (orderId, updated) => {
+    try {
+      const row = await apiPatch(`/purchases/orders/${orderId}`, updated)
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? mapOrder(row) : o)))
+      setViewingOrder(null)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  const handleAddToOrder = (addon) => {
-    const nextId = `ORD-${4471 + orders.length + 1}`
-    setOrders((prev) => [
-      {
-        id: nextId,
-        item: addon.name,
-        qty: 1,
-        status: 'pending',
-        requestedBy: 'F. Khan',
-        date: '15 Aug 2026',
-        division: 'Sales'
-      },
-      ...prev
-    ])
-    setActiveTab('Orders')
+  const handleAddToOrder = async (addon) => {
+    try {
+      const row = await apiPost(`/purchases/marketplace/${addon.id}/add-to-order`, {})
+      setOrders((prev) => [mapOrder(row), ...prev])
+      setActiveTab('Orders')
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   const handleExport = () => {
     downloadCsv(
       'purchases-orders.csv',
-      ['Order', 'Item', 'Quantity', 'Status', 'Requested by', 'Date'],
-      filteredRows.map((row) => [row.id, row.item, row.qty, STATUS_LABEL[row.status], row.requestedBy, row.date])
+      ['Order', 'Item', 'Quantity', 'Status', 'Requested by', 'Date', 'Division'],
+      filteredRows.map((row) => [row.id, row.item, row.qty, STATUS_LABEL[row.status], row.requestedBy, row.date, row.division])
     )
   }
 
@@ -646,42 +665,50 @@ function Purchases() {
         </div>
       </div>
 
-      <div className="page-tabs" role="tablist" aria-label="Purchases sections">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab}
-            className={`page-tab${activeTab === tab ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      {error && <p className="page-note" style={{ color: '#c0392b' }}>Couldn&rsquo;t load purchases: {error}</p>}
 
-      {activeTab === 'Orders' && (
+      {loading ? (
+        <p className="page-note">Loading purchases…</p>
+      ) : (
         <>
-          <OrdersToolbar
-            search={search}
-            onSearch={setSearch}
-            division={divisionFilter}
-            onDivision={setDivisionFilter}
-            status={statusFilter}
-            onStatus={setStatusFilter}
-            hiddenColumns={hiddenColumns}
-            onToggleColumn={toggleColumn}
-          />
-          <OrdersTable rows={filteredRows} onOpenOrder={setViewingOrder} hiddenColumns={hiddenColumns} />
+          <div className="page-tabs" role="tablist" aria-label="Purchases sections">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                className={`page-tab${activeTab === tab ? ' active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'Orders' && (
+            <>
+              <OrdersToolbar
+                search={search}
+                onSearch={setSearch}
+                division={divisionFilter}
+                onDivision={setDivisionFilter}
+                status={statusFilter}
+                onStatus={setStatusFilter}
+                hiddenColumns={hiddenColumns}
+                onToggleColumn={toggleColumn}
+              />
+              <OrdersTable rows={filteredRows} onOpenOrder={setViewingOrder} hiddenColumns={hiddenColumns} />
+            </>
+          )}
+
+          {activeTab === 'Marketplace' && (
+            <MarketplaceTable rows={marketplaceAddons} onAddToOrder={handleAddToOrder} />
+          )}
+
+          {activeTab === 'Add-ons' && <AddonsTable rows={activeAddons} />}
         </>
       )}
-
-      {activeTab === 'Marketplace' && (
-        <MarketplaceTable rows={MARKETPLACE_ADDONS} onAddToOrder={handleAddToOrder} />
-      )}
-
-      {activeTab === 'Add-ons' && <AddonsTable rows={ACTIVE_ADDONS} />}
 
       {isCreating && <NewPurchaseDrawer onCancel={() => setIsCreating(false)} onSave={handleSave} />}
 

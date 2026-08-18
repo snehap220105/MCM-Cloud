@@ -1,174 +1,39 @@
 import React, { useEffect, useState } from 'react'
 import { downloadCsv } from '../../utils/csv.js'
+import { apiGet, apiPatch } from '../../utils/apiClient.js'
 
-const INITIAL_TABS = [
-  {
-    name: 'General',
-    rows: [
-      { setting: 'Organization name', value: 'MCM Group PLC', status: 'Editable', field: 'text' },
-      {
-        setting: 'Short name',
-        hint: 'Login identifier — cannot be changed after creation',
-        value: 'mcmgroup',
-        status: 'Locked',
-        field: 'text'
-      },
-      {
-        setting: 'Organization ID',
-        hint: 'Give this to Customer Care when raising tickets',
-        value: '8f14e45f-ceea-4d3b-9c7f-2b1a0d7e33aa',
-        status: 'Locked',
-        field: 'text'
-      },
-      {
-        setting: 'Home region',
-        hint: 'Set at org creation',
-        value: 'EU (London) — euw2',
-        status: 'Locked',
-        field: 'text'
-      },
-      {
-        setting: 'Default country code',
-        value: '+44 (United Kingdom)',
-        status: 'Editable',
-        field: 'select',
-        options: ['+44 (United Kingdom)', '+1 (United States)', '+353 (Ireland)', '+61 (Australia)', '+91 (India)']
-      },
-      {
-        setting: 'Default language',
-        value: 'English (United Kingdom)',
-        status: 'Editable',
-        field: 'select',
-        options: ['English (United Kingdom)', 'English (United States)', 'French (France)', 'German (Germany)']
-      },
-      {
-        setting: 'Time zone',
-        value: 'Europe/London',
-        status: 'Editable',
-        field: 'select',
-        options: ['Europe/London', 'Europe/Dublin', 'America/New_York', 'UTC']
-      },
-      {
-        setting: 'Date / time format',
-        value: 'DD/MM/YYYY · 24 hour',
-        status: 'Editable',
-        field: 'select',
-        options: ['DD/MM/YYYY · 24 hour', 'MM/DD/YYYY · 12 hour', 'YYYY-MM-DD · 24 hour']
-      }
-    ]
-  },
-  {
-    name: 'Security',
-    rows: [
-      {
-        setting: 'Minimum password length',
-        hint: 'Genesys default minimum is 8',
-        value: '12',
-        status: 'Editable',
-        field: 'text'
-      },
-      { setting: 'Password expiry (days)', value: '90', status: 'Editable', field: 'text' },
-      {
-        setting: 'Password history (previous passwords blocked)',
-        value: '10',
-        status: 'Editable',
-        field: 'text'
-      },
-      { setting: 'Session idle timeout (minutes)', value: '60', status: 'Editable', field: 'text' },
-      {
-        setting: 'Require multi-factor authentication',
-        hint: 'Applies to native logins; SSO users authenticate at the IdP',
-        state: 'enabled',
-        status: 'Editable',
-        field: 'checkbox'
-      },
-      {
-        setting: 'Enforce SSO only (disable native passwords)',
-        state: 'disabled',
-        status: 'Editable',
-        field: 'checkbox'
-      },
-      {
-        setting: 'Allow MCM Care support access to configuration',
-        state: 'enabled',
-        status: 'Editable',
-        field: 'checkbox'
-      },
-      {
-        setting: 'Trusted IP ranges',
-        value: '194.60.0.0/16, 10.20.0.0/16',
-        status: 'Editable',
-        field: 'text'
-      }
-    ]
-  },
-  {
-    name: 'Branding',
-    rows: [
-      { setting: 'Use custom logo in agent UI', state: 'enabled', status: 'Editable', field: 'checkbox' },
-      {
-        setting: 'Theme',
-        value: 'MCM Navy',
-        status: 'Editable',
-        field: 'select',
-        options: ['MCM Navy', 'MCM Light', 'High Contrast']
-      },
-      { setting: 'Accent colour', value: '#FF4F1F', status: 'Editable', field: 'text' },
-      { setting: 'Login page message', value: 'Welcome to MCM Cloud CX', status: 'Editable', field: 'text' }
-    ]
-  },
-  {
-    name: 'Data Residency',
-    note:
-      'Data residency is fixed at org creation for compliance. Media region is the only adjustable value — it affects where RTP is anchored, not where data is stored.',
-    rows: [
-      { setting: 'Core region (org home)', value: 'EU (London) — euw2', status: 'Locked', field: 'text' },
-      {
-        setting: 'Preferred media region',
-        value: 'EU (London)',
-        status: 'Editable',
-        field: 'select',
-        options: ['EU (London)', 'EU (Frankfurt)', 'US East (Virginia)']
-      },
-      {
-        setting: 'Call recording storage',
-        hint: 'Recordings stay in-region for UK-GDPR',
-        value: 'EU (London)',
-        status: 'Locked',
-        field: 'text'
-      },
-      {
-        setting: 'Transcript & analytics storage',
-        value: 'EU (London)',
-        status: 'Locked',
-        field: 'text'
-      }
-    ]
-  },
-  {
-    name: 'Beta Programme',
-    note:
-      'Beta features release "dark" and are enabled per-org here. They may change or be withdrawn; not covered by SLA.',
-    rows: [
-      {
-        setting: 'Agent Copilot summaries',
-        hint: 'AI wrap-up summaries after each call',
-        state: 'enabled',
-        status: 'Editable',
-        field: 'checkbox'
-      },
-      { setting: 'New analytics workspace', state: 'enabled', status: 'Editable', field: 'checkbox' },
-      { setting: 'WebRTC codec v2 (Opus FEC)', state: 'disabled', status: 'Editable', field: 'checkbox' },
-      {
-        setting: 'Predictive routing pilot',
-        hint: 'AI-matched agent selection on eligible queues',
-        state: 'disabled',
-        status: 'Editable',
-        field: 'checkbox'
-      }
-    ]
+// Descriptive copy for tabs that need it — not stored in the backend since
+// it's static page content, not a setting.
+const TAB_NOTES = {
+  'Data Residency':
+    'Data residency is fixed at org creation for compliance. Media region is the only adjustable value — it affects where RTP is anchored, not where data is stored.',
+  'Beta Programme':
+    'Beta features release "dark" and are enabled per-org here. They may change or be withdrawn; not covered by SLA.'
+}
+
+const TAB_ORDER = ['General', 'Security', 'Branding', 'Data Residency', 'Beta Programme']
+
+function mapRow(r) {
+  return {
+    id: r.id,
+    setting: r.setting_label,
+    hint: r.hint || undefined,
+    value: r.value,
+    state: r.state || undefined,
+    status: r.status,
+    field: r.field_type,
+    options: r.options || undefined,
+    lastChanged: r.last_changed ? formatLastChanged(new Date(r.last_changed)) : undefined
   }
-]
+}
+
+function groupIntoTabs(apiRows) {
+  return TAB_ORDER.map((name) => ({
+    name,
+    note: TAB_NOTES[name],
+    rows: apiRows.filter((r) => r.tab_name === name).map(mapRow)
+  })).filter((tab) => tab.rows.length > 0)
+}
 
 function SettingValue({ row }) {
   if (!row.state) return row.value
@@ -414,55 +279,78 @@ function EditSettingsModal({ tab, onCancel, onSave }) {
 }
 
 function OrganizationSettings() {
-  const [tabs, setTabs] = useState(INITIAL_TABS)
+  const [tabs, setTabs] = useState([])
   const [activeTabName, setActiveTabName] = useState('General')
   const [isEditing, setIsEditing] = useState(false)
   const [quickEditRow, setQuickEditRow] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const activeTab = tabs.find((tab) => tab.name === activeTabName) || tabs[0]
 
-  const updateRow = (setting, updater) => {
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    apiGet('/organization-settings')
+      .then((rows) => { if (!cancelled) setTabs(groupIntoTabs(rows)) })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const applyUpdatedRow = (tabName, updated) => {
     setTabs((prev) =>
       prev.map((tab) => {
-        if (tab.name !== activeTab.name) return tab
-        return {
-          ...tab,
-          rows: tab.rows.map((row) => (row.setting === setting ? updater(row) : row))
-        }
+        if (tab.name !== tabName) return tab
+        return { ...tab, rows: tab.rows.map((row) => (row.id === updated.id ? mapRow(updated) : row)) }
       })
     )
   }
 
-  const handleQuickSave = (value) => {
+  const handleQuickSave = async (value) => {
     const row = quickEditRow
-    const changed = row.field === 'checkbox' ? (row.state === 'enabled') !== value : row.value !== value
-    updateRow(row.setting, (r) => {
-      const updated = row.field === 'checkbox' ? { ...r, state: value ? 'enabled' : 'disabled' } : { ...r, value }
-      return changed ? { ...updated, lastChanged: formatLastChanged(new Date()) } : updated
-    })
     setQuickEditRow(null)
+    try {
+      const body = row.field === 'checkbox' ? { state: value ? 'enabled' : 'disabled' } : { value }
+      const updated = await apiPatch(`/organization-settings/${row.id}`, body)
+      applyUpdatedRow(activeTab.name, updated)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  const handleSave = (draft) => {
-    const now = formatLastChanged(new Date())
-    setTabs((prev) =>
-      prev.map((tab) => {
-        if (tab.name !== activeTab.name) return tab
-        return {
-          ...tab,
-          rows: tab.rows.map((row) => {
-            const id = fieldId(tab.name, row.setting)
-            if (!(id in draft)) return row
-            const newValue = draft[id]
-            const changed = row.field === 'checkbox' ? (row.state === 'enabled') !== newValue : row.value !== newValue
-            const updatedRow = row.field === 'checkbox'
-              ? { ...row, state: newValue ? 'enabled' : 'disabled' }
-              : { ...row, value: newValue }
-            return changed ? { ...updatedRow, lastChanged: now } : updatedRow
-          })
-        }
-      })
-    )
+  const handleSave = async (draft) => {
     setIsEditing(false)
+    const changedRows = activeTab.rows.filter((row) => {
+      const id = fieldId(activeTab.name, row.setting)
+      if (!(id in draft)) return false
+      const newValue = draft[id]
+      return row.field === 'checkbox' ? (row.state === 'enabled') !== newValue : row.value !== newValue
+    })
+    if (changedRows.length === 0) return
+
+    try {
+      const updates = await Promise.all(
+        changedRows.map((row) => {
+          const newValue = draft[fieldId(activeTab.name, row.setting)]
+          const body = row.field === 'checkbox' ? { state: newValue ? 'enabled' : 'disabled' } : { value: newValue }
+          return apiPatch(`/organization-settings/${row.id}`, body)
+        })
+      )
+      setTabs((prev) =>
+        prev.map((tab) => {
+          if (tab.name !== activeTab.name) return tab
+          return {
+            ...tab,
+            rows: tab.rows.map((row) => {
+              const match = updates.find((u) => u.id === row.id)
+              return match ? mapRow(match) : row
+            })
+          }
+        })
+      )
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   const handleExport = () => {
@@ -487,38 +375,48 @@ function OrganizationSettings() {
 
       <div className="page-head">
         <h1 className="page-title">Organization Settings</h1>
-        <div className="page-actions">
-          <button type="button" className="btn btn-primary" onClick={() => setIsEditing(true)}>
-            + Edit {activeTab.name} Settings
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={handleExport}>Export</button>
-        </div>
+        {activeTab && (
+          <div className="page-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setIsEditing(true)}>
+              + Edit {activeTab.name} Settings
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={handleExport}>Export</button>
+          </div>
+        )}
       </div>
 
-      <div className="page-tabs" role="tablist" aria-label="Organization settings sections">
-        {tabs.map((tab) => (
-          <button
-            key={tab.name}
-            type="button"
-            role="tab"
-            aria-selected={activeTab.name === tab.name}
-            className={`page-tab${activeTab.name === tab.name ? ' active' : ''}`}
-            onClick={() => setActiveTabName(tab.name)}
-          >
-            {tab.name}
-          </button>
-        ))}
-      </div>
+      {error && <p className="page-note" style={{ color: '#c0392b' }}>Couldn&rsquo;t load settings: {error}</p>}
 
-      {activeTab.note && <p className="page-note">{activeTab.note}</p>}
+      {loading ? (
+        <p className="page-note">Loading organization settings…</p>
+      ) : activeTab ? (
+        <>
+          <div className="page-tabs" role="tablist" aria-label="Organization settings sections">
+            {tabs.map((tab) => (
+              <button
+                key={tab.name}
+                type="button"
+                role="tab"
+                aria-selected={activeTab.name === tab.name}
+                className={`page-tab${activeTab.name === tab.name ? ' active' : ''}`}
+                onClick={() => setActiveTabName(tab.name)}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </div>
 
-      <div className="card">
-        <SettingsTable rows={activeTab.rows} onEditRow={setQuickEditRow} />
-      </div>
+          {activeTab.note && <p className="page-note">{activeTab.note}</p>}
 
-      {isEditing && (
-        <EditSettingsModal tab={activeTab} onCancel={() => setIsEditing(false)} onSave={handleSave} />
-      )}
+          <div className="card">
+            <SettingsTable rows={activeTab.rows} onEditRow={setQuickEditRow} />
+          </div>
+
+          {isEditing && (
+            <EditSettingsModal tab={activeTab} onCancel={() => setIsEditing(false)} onSave={handleSave} />
+          )}
+        </>
+      ) : null}
 
       {quickEditRow && (
         <QuickEditModal row={quickEditRow} onCancel={() => setQuickEditRow(null)} onSave={handleQuickSave} />
