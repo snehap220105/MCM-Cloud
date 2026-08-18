@@ -1,14 +1,21 @@
 {
-  "name": "mcm-wfm-server",
+  "name": "mcm-cloud-server",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node --env-file=.env index.js"
+    "start": "node --env-file=.env index.js",
+    "dev:account-settings": "node --watch src/index.js",
+    "start:account-settings": "node src/index.js",
+    "migrate:account-settings": "node src/db/migrate.js",
+    "seed:account-settings": "node src/db/seed.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "pg": "^8.12.0"
+    "pg": "^8.12.0",
+    "telnyx": "^7.15.0",
+    "zod": "^3.23.8"
   }
 }

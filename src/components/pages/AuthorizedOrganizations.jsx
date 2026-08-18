@@ -1,18 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { downloadCsv } from '../../utils/csv.js'
 import ColumnsMenu from '../ColumnsMenu.jsx'
+import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js'
 
 const DIVISION_FILTERS = ['UK Retail', 'UK Digital']
 
 const TABS = ['Trustees', 'Trustors', 'Audit']
 
-const TRUSTEES = [
-  { org: 'MCM Retail Ireland', orgId: 'a19c...44f', relationship: 'Trustee', scope: 'Contact Centre Admin', divisions: 'UK Retail, IE Retail', expires: '31 Dec 2026', status: 'active' },
-  { org: 'Northstar BPO', orgId: '77bd...9a1', relationship: 'Trustee', scope: 'Supervisor, Agent', divisions: 'Partner — Manila', expires: '30 Sep 2026', status: 'active' },
-  { org: 'MCM Group PLC', orgId: '8f14...3aa', relationship: 'Trustor', scope: '—', divisions: 'All', expires: '—', status: 'owner' },
-  { org: 'Cloudline Partners', orgId: '32ee...0c8', relationship: 'Trustee', scope: 'Read-only Admin', divisions: 'UK Digital', expires: '11 Aug 2026', status: 'expiring' },
-  { org: 'Vertex Consulting', orgId: 'be40...712', relationship: 'Trustee', scope: 'Implementation', divisions: 'All', expires: '—', status: 'revoked' }
-]
+function mapTrust(row) {
+  return {
+    org: row.org,
+    orgId: row.org_id,
+    relationship: row.relationship,
+    scope: row.scope,
+    divisions: row.divisions,
+    expires: row.expires,
+    status: row.status
+  }
+}
 
 const STATUS_LABEL = {
   active: 'Active',
@@ -29,10 +34,6 @@ const COLUMNS = [
   { key: 'divisions', label: 'Divisions' },
   { key: 'expires', label: 'Expires' },
   { key: 'status', label: 'Status' }
-]
-
-const TRUSTORS = [
-  { org: 'mcm-sandbox', roles: 'Full admin', expiry: '—', status: 'active' }
 ]
 
 const TRUST_AUDIT = [
@@ -487,6 +488,7 @@ const DIVISIONS = ['All', 'UK Retail', 'IE Retail', 'UK Digital', 'Partner — M
 
 function AddTrustDrawer({ onCancel, onSave }) {
   const [form, setForm] = useState({
+    orgName: '',
     orgId: '',
     relationship: RELATIONSHIPS[0],
     rolesGranted: ROLES[0],
@@ -495,6 +497,8 @@ function AddTrustDrawer({ onCancel, onSave }) {
     allowCloning: false,
     notifyOnSignIn: true
   })
+  const [orgNameError, setOrgNameError] = useState('')
+  const [orgIdError, setOrgIdError] = useState('')
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -505,6 +509,22 @@ function AddTrustDrawer({ onCancel, onSave }) {
   }, [onCancel])
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
+
+  const handleSubmit = () => {
+    let hasError = false
+    const trimmedName = form.orgName.trim()
+    if (!trimmedName || /^\d+$/.test(trimmedName)) {
+      setOrgNameError('Organization Name must include at least one letter — it cannot be numbers only.')
+      hasError = true
+    }
+    const trimmedId = form.orgId.trim()
+    if (!trimmedId || /^\d+$/.test(trimmedId)) {
+      setOrgIdError('Organization ID must include at least one letter — it cannot be numbers only.')
+      hasError = true
+    }
+    if (hasError) return
+    onSave(form)
+  }
 
   return (
     <div className="modal-backdrop" onMouseDown={onCancel}>
@@ -524,14 +544,45 @@ function AddTrustDrawer({ onCancel, onSave }) {
           <h3 className="drawer-section-heading">Trust</h3>
 
           <div className="modal-field">
+            <label className="modal-label" htmlFor="at-org-name">Organization Name</label>
+            <input
+              id="at-org-name"
+              type="text"
+              className="modal-input"
+              value={form.orgName}
+              onChange={(e) => {
+                setField('orgName', e.target.value)
+                if (orgNameError) setOrgNameError('')
+              }}
+              aria-invalid={Boolean(orgNameError)}
+              aria-describedby={orgNameError ? 'at-org-name-error' : undefined}
+            />
+            {orgNameError && (
+              <p id="at-org-name-error" style={{ color: '#c0392b', fontSize: '0.85em', margin: '4px 0 0' }}>
+                {orgNameError}
+              </p>
+            )}
+          </div>
+
+          <div className="modal-field">
             <label className="modal-label" htmlFor="at-org-id">Organization ID</label>
             <input
               id="at-org-id"
               type="text"
               className="modal-input"
               value={form.orgId}
-              onChange={(e) => setField('orgId', e.target.value)}
+              onChange={(e) => {
+                setField('orgId', e.target.value)
+                if (orgIdError) setOrgIdError('')
+              }}
+              aria-invalid={Boolean(orgIdError)}
+              aria-describedby={orgIdError ? 'at-org-id-error' : undefined}
             />
+            {orgIdError && (
+              <p id="at-org-id-error" style={{ color: '#c0392b', fontSize: '0.85em', margin: '4px 0 0' }}>
+                {orgIdError}
+              </p>
+            )}
           </div>
 
           <div className="modal-field">
@@ -610,7 +661,7 @@ function AddTrustDrawer({ onCancel, onSave }) {
 
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={() => onSave(form)}>Save</button>
+          <button type="button" className="btn btn-primary" onClick={handleSubmit}>Save</button>
         </div>
       </div>
     </div>
@@ -620,12 +671,31 @@ function AddTrustDrawer({ onCancel, onSave }) {
 function AuthorizedOrganizations() {
   const [activeTab, setActiveTab] = useState('Trustees')
   const [isAdding, setIsAdding] = useState(false)
-  const [trustees, setTrustees] = useState(TRUSTEES)
+  const [trustees, setTrustees] = useState([])
+  const [trustors, setTrustors] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [divisionFilter, setDivisionFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('Any')
   const [viewingTrust, setViewingTrust] = useState(null)
   const [hiddenColumns, setHiddenColumns] = useState(() => new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      apiGet('/authorized-organizations'),
+      apiGet('/authorized-organizations/trustors')
+    ])
+      .then(([trusteesRes, trustorsRes]) => {
+        if (cancelled) return
+        setTrustees(trusteesRes.map(mapTrust))
+        setTrustors(trustorsRes)
+      })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const toggleColumn = (key) =>
     setHiddenColumns((prev) => {
@@ -645,26 +715,29 @@ function AuthorizedOrganizations() {
     })
   }, [trustees, search, divisionFilter, statusFilter])
 
-  const handleSave = (form) => {
-    const relationship = form.relationship.startsWith('Trustee') ? 'Trustee' : 'Trustor'
-    setTrustees((prev) => [
-      {
-        org: form.orgId || 'New Organization',
-        orgId: (form.orgId || '—').slice(0, 8),
-        relationship,
-        scope: form.rolesGranted,
-        divisions: form.divisions,
-        expires: form.expiryDate,
-        status: 'active'
-      },
-      ...prev
-    ])
-    setIsAdding(false)
+  const handleSave = async (form) => {
+    try {
+      const row = await apiPost('/authorized-organizations', form)
+      const relationship = form.relationship.startsWith('Trustee') ? 'Trustee' : 'Trustor'
+      if (relationship === 'Trustee') {
+        setTrustees((prev) => [mapTrust(row), ...prev])
+      } else {
+        setTrustors((prev) => [{ org: row.org, roles: row.scope, expiry: row.expires, status: row.status }, ...prev])
+      }
+      setIsAdding(false)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
-  const handleUpdateTrust = (orgId, updated) => {
-    setTrustees((prev) => prev.map((t) => (t.orgId === orgId ? { ...t, ...updated } : t)))
-    setViewingTrust(null)
+  const handleUpdateTrust = async (orgId, updated) => {
+    try {
+      const row = await apiPatch(`/authorized-organizations/${orgId}`, updated)
+      setTrustees((prev) => prev.map((t) => (t.orgId === orgId ? mapTrust(row) : t)))
+      setViewingTrust(null)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   const handleExport = () => {
@@ -701,40 +774,48 @@ function AuthorizedOrganizations() {
         </div>
       </div>
 
-      <div className="page-tabs" role="tablist" aria-label="Authorized organizations sections">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab}
-            className={`page-tab${activeTab === tab ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      {error && <p className="page-note" style={{ color: '#c0392b' }}>Couldn&rsquo;t load authorized organizations: {error}</p>}
 
-      {activeTab === 'Trustees' && (
+      {loading ? (
+        <p className="page-note">Loading authorized organizations…</p>
+      ) : (
         <>
-          <TrusteesToolbar
-            search={search}
-            onSearch={setSearch}
-            division={divisionFilter}
-            onDivision={setDivisionFilter}
-            status={statusFilter}
-            onStatus={setStatusFilter}
-            hiddenColumns={hiddenColumns}
-            onToggleColumn={toggleColumn}
-          />
-          <TrusteesTable rows={filteredRows} onOpenTrust={setViewingTrust} hiddenColumns={hiddenColumns} />
+          <div className="page-tabs" role="tablist" aria-label="Authorized organizations sections">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                className={`page-tab${activeTab === tab ? ' active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'Trustees' && (
+            <>
+              <TrusteesToolbar
+                search={search}
+                onSearch={setSearch}
+                division={divisionFilter}
+                onDivision={setDivisionFilter}
+                status={statusFilter}
+                onStatus={setStatusFilter}
+                hiddenColumns={hiddenColumns}
+                onToggleColumn={toggleColumn}
+              />
+              <TrusteesTable rows={filteredRows} onOpenTrust={setViewingTrust} hiddenColumns={hiddenColumns} />
+            </>
+          )}
+
+          {activeTab === 'Trustors' && <TrustorsTable rows={trustors} />}
+
+          {activeTab === 'Audit' && <TrustAuditTable rows={TRUST_AUDIT} />}
         </>
       )}
-
-      {activeTab === 'Trustors' && <TrustorsTable rows={TRUSTORS} />}
-
-      {activeTab === 'Audit' && <TrustAuditTable rows={TRUST_AUDIT} />}
 
       {isAdding && <AddTrustDrawer onCancel={() => setIsAdding(false)} onSave={handleSave} />}
 
